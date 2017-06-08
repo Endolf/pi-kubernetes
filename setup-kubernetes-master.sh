@@ -2,8 +2,6 @@
 
 set -eo pipefail
 
-./install-kubernetes.sh
-
 sudo kubeadm init --pod-network-cidr 10.244.0.0/16 --apiserver-advertise-address=`ifconfig wlan0 | grep "inet addr" | cut -d ":" -f2 | cut -d " " -f1`
 sudo cp /etc/kubernetes/admin.conf $HOME/
 sudo chown $(id -u):$(id -g) $HOME/admin.conf
