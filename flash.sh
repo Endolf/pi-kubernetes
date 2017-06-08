@@ -101,7 +101,7 @@ done
 image_size=`ls -lh $image | cut -d " " -f 5`
 
 echo "Flashing $image_size..."
-sudo dd status=progress bs=4M if=$image of=$device
+#sudo dd status=progress bs=4M if=$image of=$device
 
 udevadm settle
 
@@ -148,13 +148,20 @@ fi
 
 if [ ! -z "${SSID}" ] && [ ! -z "${PSK}" ]; then
     echo "Setting SSID and PSK"
-    ssid_line=( $(sudo grep -n 'ssid="aa.net.uk 32180"' root/etc/wpa_supplicant/wpa_supplicant.conf || true | cut -d ":" -f1) )
+    ssid_line=( $(sudo grep -n 'ssid="${SSID}"' root/etc/wpa_supplicant/wpa_supplicant.conf || true | cut -d ":" -f1) )
     for (( idx=${#ssid_line[@]}-1 ; idx>=0 ; idx-- )) ; do
         echo "Found SSID on line ${ssid_line[idx]}, need to delete lines $((${ssid_line[idx]}-1)) thru $((${ssid_line[idx]}+2))"
         sudo sed -ie $((${ssid_line[idx]}-1))','$((${ssid_line[idx]}+2))'d' root/etc/wpa_supplicant/wpa_supplicant.conf
     done
     wpa_passphrase "${SSID}" "${PSK}" | grep -v "#psk" | sudo tee -a root/etc/wpa_supplicant/wpa_supplicant.conf
 fi
+
+grep -q cgroup_enable=cpuset boot/cmdline.txt || sudo sed -i '1s/^/cgroup_enable=cpuset /' boot/cmdline.txt
+
+sudo cp -a ../install-kubernetes.sh root/usr/local/bin/
+sudo cp -a ../setup-kubernetes-master.sh root/usr/local/bin/
+
+sudo chown 0:50 root/usr/local/bin/*.sh
 
 sync
 
