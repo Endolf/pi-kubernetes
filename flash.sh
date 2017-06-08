@@ -107,6 +107,9 @@ echo "Mounting $root_partition"
 grep -q gpu_mem boot/config.txt &&
     sudo sed -ri 's/^gpu_mem=.*$/gpu_mem=16/' boot/config.txt || echo -e "\n# Set GPU memory\ngpu_mem=16" | sudo tee --append boot/config.txt
 
+echo $IMAGE_HOSTNAME | sudo tee root/etc/hostname
+sudo sed -ri 's/^127.0.1.1.*$/127.0.1.1\t'${IMAGE_HOSTNAME}'/' root/etc/hosts
+
 for partition in $(df | grep "${device}" | cut -d " " -f1)
 do
   echo "Unmounting $partition"
