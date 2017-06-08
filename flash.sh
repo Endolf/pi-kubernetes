@@ -26,6 +26,11 @@ while getopts ":n:" opt; do
   esac
 done
 
+if [[ -z "${IMAGE_HOSTNAME// }" ]]; then
+  echo "Hostname not set"
+  usage
+fi
+
 pushd build > /dev/null
 
 if [ ! -f raspbian_lite_latest.zip ]; then
@@ -46,7 +51,7 @@ device="${REPLY}"
 [[ ${device} == /dev/mmcblk*p* ]] && device=`echo ${device} | sed -r 's/\/dev\/mmcblk([[:digit:]]+)p([[:digit:]]+)/\/dev\/mmcblk\1/'`
 [[ ${device} == /dev/sd* ]] && device=`echo ${device} | sed -r 's/\/dev\/sd([[:alpha:]]+)([[:digit:]]+)/\/dev\/sd\1/'`
 
-echo "Writing image to $device"
+echo "Writing image to $device with hostname $IMAGE_HOSTNAME"
 read -rp "Is this correct? " conf
 case $conf in
   [Yy]* ) ;;
@@ -54,6 +59,17 @@ case $conf in
   * ) echo "Please answer yes or no."
     exit 1;;
 esac
+
+if hdparm -r "${device}" | grep -q off; then
+    writable=1
+else
+    echo "${device} is read only, aborting"
+fi
+
+for partition in $(df | grep "${device}" | cut -d " " -f1)
+do
+  sudo umount $partition
+done
 
 popd > /dev/null
 exit 0
