@@ -13,6 +13,9 @@ OPTIONS:
   -h    Show this message
   -d    Device to flash the image to.
   -n    Set hostname for this SD image (master will generate a master image, otherwise nodes)
+  -k    Sets the file that contains the RSA public key. This will also disable password access and enable ssh server
+  -s    Sets the wireless SSID
+  -p    Sets the wireless PSK
 EOF
   exit 1
 }
@@ -21,16 +24,31 @@ if [ $# -lt 1 ]; then
   usage
 fi
 
-while getopts ":n:d:" opt; do
+while getopts ":n:d:k:s:p:" opt; do
   case $opt in
     n) IMAGE_HOSTNAME=$OPTARG ;;
     d) device=$OPTARG ;;
+    k) ssh_pub_key_file=$OPTARG ;;
+    s) SSID=$OPTARG ;;
+    p) PSK=$OPTARG ;;
   esac
 done
 
 if [[ -z "${IMAGE_HOSTNAME// }" ]]; then
   echo "Hostname not set"
   usage
+fi
+
+if [[ ! -z "${ssh_pub_key_file// }" ]]; then
+    if [ ! -f $ssh_pub_key_file ]; then
+        echo $ssh_pub_key_file "does not exist. Aborting"
+        exit 1;
+    fi
+fi
+
+if ( [[ ! -z "${SSID// }" ]] || [[ ! -z "${PSK// }" ]] ) && ( [[ -z "${SSID// }" ]] || [[ -z "${PSK// }" ]] ); then
+    echo "Either both the SSID and PSK must be specified, or neither"
+    exit 1;
 fi
 
 pushd build > /dev/null
@@ -105,10 +123,38 @@ echo "Mounting $root_partition"
 #sudo mount -t ${FS_TYPE} "${root_partition}" root
 
 grep -q gpu_mem boot/config.txt &&
-    sudo sed -ri 's/^gpu_mem=.*$/gpu_mem=16/' boot/config.txt || echo -e "\n# Set GPU memory\ngpu_mem=16" | sudo tee --append boot/config.txt
+    sudo sed -ri 's/^gpu_mem=.*$/gpu_mem=16/' boot/config.txt || echo -e "\n# Set GPU memory\ngpu_mem=16" | sudo tee -a boot/config.txt
 
 echo $IMAGE_HOSTNAME | sudo tee root/etc/hostname
 sudo sed -ri 's/^127.0.1.1.*$/127.0.1.1\t'${IMAGE_HOSTNAME}'/' root/etc/hosts
+
+if [[ ! -z "${ssh_pub_key_file// }" ]]; then
+    if [ -f $ssh_pub_key_file ]; then
+        echo "Setting up ssh server and keys"
+        sudo sed -ri 's/^ChallengeResponseAuthentication .*$/ChallengeResponseAuthentication no/' root/etc/ssh/sshd_config
+        sudo sed -ri 's/^#?PasswordAuthentication .*$/PasswordAuthentication no/' root/etc/ssh/sshd_config
+        sudo sed -ri 's/^UsePAM .*$/UsePAM no/' root/etc/ssh/sshd_config
+        sudo sed -ri 's/^PermitRootLogin .*$/PermitRootLogin no/' root/etc/ssh/sshd_config
+        sudo mkdir -p root/home/pi/.ssh
+        sudo cp $ssh_pub_key_file root/home/pi/.ssh/authorized_keys
+        sudo chmod 600 root/home/pi/.ssh/authorized_keys
+        sudo chown -R 1000:1000 root/home/pi/.ssh/
+        sudo touch boot/ssh
+    else
+        echo $ssh_pub_key_file "does not exist. Aborting"
+        exit 1;
+    fi
+fi
+
+if [ ! -z "${SSID}" ] && [ ! -z "${PSK}" ]; then
+    echo "Setting SSID and PSK"
+    ssid_line=( $(sudo grep -n 'ssid="aa.net.uk 32180"' root/etc/wpa_supplicant/wpa_supplicant.conf | cut -d ":" -f1) )
+    for (( idx=${#ssid_line[@]}-1 ; idx>=0 ; idx-- )) ; do
+        echo "Found SSID on line ${ssid_line[idx]}, need to delete lines $((${ssid_line[idx]}-1)) thru $((${ssid_line[idx]}+2))"
+        sudo sed -ie $((${ssid_line[idx]}-1))','$((${ssid_line[idx]}+2))'d' root/etc/wpa_supplicant/wpa_supplicant.conf
+    done
+    wpa_passphrase "${SSID}" "${PSK}" | grep -v "#psk" | sudo tee -a root/etc/wpa_supplicant/wpa_supplicant.conf
+fi
 
 for partition in $(df | grep "${device}" | cut -d " " -f1)
 do
