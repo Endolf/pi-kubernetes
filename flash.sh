@@ -71,5 +71,10 @@ do
   sudo umount $partition
 done
 
+image_size=`ls -lh $image | cut -d " " -f 5`
+
+echo "Flashing $image_size..."
+sudo dd status=progress bs=4M if=$image of=$device
+
 popd > /dev/null
 exit 0
