@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eox pipefail
+set -eo pipefail
 
 usage()
 {
@@ -95,17 +95,17 @@ fi
 for partition in $(df | grep "${device}" | cut -d " " -f1)
 do
   echo "Unmounting $partition"
-#  sudo umount $partition
+  sudo umount $partition
 done
 
 image_size=`ls -lh $image | cut -d " " -f 5`
 
 echo "Flashing $image_size..."
-#sudo dd status=progress bs=4M if=$image of=$device
+sudo dd status=progress bs=4M if=$image of=$device
 
 udevadm settle
 
-#sudo hdparm -z $device
+sudo hdparm -z $device
 
 if [[ ${device} == /dev/mmcblk* ]]; then
   boot_partition="${device}p1"
@@ -117,10 +117,10 @@ fi
 
 FS_TYPE=$(sudo blkid -o value -s TYPE "${boot_partition}" || echo vfat)
 echo "Mounting $boot_partition"
-#sudo mount -t ${FS_TYPE} "${boot_partition}" boot
+sudo mount -t ${FS_TYPE} "${boot_partition}" boot
 FS_TYPE=$(sudo blkid -o value -s TYPE "${root_partition}" || echo vfat)
 echo "Mounting $root_partition"
-#sudo mount -t ${FS_TYPE} "${root_partition}" root
+sudo mount -t ${FS_TYPE} "${root_partition}" root
 
 grep -q gpu_mem boot/config.txt &&
     sudo sed -ri 's/^gpu_mem=.*$/gpu_mem=16/' boot/config.txt || echo -e "\n# Set GPU memory\ngpu_mem=16" | sudo tee -a boot/config.txt
@@ -148,7 +148,7 @@ fi
 
 if [ ! -z "${SSID}" ] && [ ! -z "${PSK}" ]; then
     echo "Setting SSID and PSK"
-    ssid_line=( $(sudo grep -n 'ssid="aa.net.uk 32180"' root/etc/wpa_supplicant/wpa_supplicant.conf | cut -d ":" -f1) )
+    ssid_line=( $(sudo grep -n 'ssid="aa.net.uk 32180"' root/etc/wpa_supplicant/wpa_supplicant.conf || true | cut -d ":" -f1) )
     for (( idx=${#ssid_line[@]}-1 ; idx>=0 ; idx-- )) ; do
         echo "Found SSID on line ${ssid_line[idx]}, need to delete lines $((${ssid_line[idx]}-1)) thru $((${ssid_line[idx]}+2))"
         sudo sed -ie $((${ssid_line[idx]}-1))','$((${ssid_line[idx]}+2))'d' root/etc/wpa_supplicant/wpa_supplicant.conf
@@ -156,10 +156,12 @@ if [ ! -z "${SSID}" ] && [ ! -z "${PSK}" ]; then
     wpa_passphrase "${SSID}" "${PSK}" | grep -v "#psk" | sudo tee -a root/etc/wpa_supplicant/wpa_supplicant.conf
 fi
 
+sync
+
 for partition in $(df | grep "${device}" | cut -d " " -f1)
 do
   echo "Unmounting $partition"
-  #sudo umount $partition
+  sudo umount $partition
 done
 
 popd > /dev/null
