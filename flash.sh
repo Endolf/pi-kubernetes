@@ -157,6 +157,8 @@ if [ ! -z "${SSID}" ] && [ ! -z "${PSK}" ]; then
 fi
 
 grep -q cgroup_enable=cpuset boot/cmdline.txt || sudo sed -i '1s/^/cgroup_enable=cpuset /' boot/cmdline.txt
+grep -q net.ipv4.tcp_mtu_probing root/etc/sysctl.conf || echo "net.ipv4.tcp_mtu_probing=1" | sudo tee -a root/etc/sysctl.conf
+grep -q vm.swappiness root/etc/sysctl.conf || echo "vm.swappiness=1" | sudo tee -a root/etc/sysctl.conf
 
 sudo cp -a ../install-kubernetes.sh root/usr/local/bin/
 sudo cp -a ../setup-kubernetes-master.sh root/usr/local/bin/
